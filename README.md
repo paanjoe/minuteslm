@@ -51,6 +51,21 @@ npm run dev
 
 Open http://localhost:5173
 
+## Docker (self-hosting)
+
+**Note:** `whisper-turbo` requires Apple Silicon. On Linux x86 servers, the backend build may fail; consider using `faster-whisper` or another ASR instead.
+
+```bash
+# Start PostgreSQL + backend + frontend
+docker compose up -d
+
+# Backend: http://localhost:8000
+# Frontend: http://localhost:5173
+# Ollama must run on the host (install separately)
+```
+
+Set `OLLAMA_BASE_URL` if Ollama runs elsewhere (e.g. `http://host.docker.internal:11434` on Mac).
+
 ## API
 
 - `GET /meetings` - List meetings

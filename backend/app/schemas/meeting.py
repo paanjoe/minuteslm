@@ -16,23 +16,34 @@ class MeetingStatus(str, Enum):
 
 class MeetingCreate(BaseModel):
     title: str = "Untitled Meeting"
+    project_id: int
+
+
+class MeetingUpdate(BaseModel):
+    title: Optional[str] = None
+    template_id: Optional[int] = None
 
 
 class MeetingResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    project_id: Optional[int] = None
     title: str
+    template_id: Optional[int] = None
     created_at: datetime
     audio_path: Optional[str] = None
     status: MeetingStatus
     error_message: Optional[str] = None
+    progress_message: Optional[str] = None
 
 
 class MeetingListResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    project_id: Optional[int] = None
     title: str
+    template_id: Optional[int] = None
     created_at: datetime
     status: MeetingStatus
