@@ -1,0 +1,12 @@
+---
+description: TypeScript / React frontend conventions
+globs: frontend/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Frontend (TypeScript / React)
+
+- **API:** Use the shared API client in `frontend/src/api/client.ts`; do not duplicate auth headers or base URL.
+- **Auth:** Use `useAuth()` and `ProtectedRoute`; do not store tokens outside the agreed key (single constant from `constants/auth`).
+- **Types:** Prefer `const` and typed interfaces; avoid `any`; handle loading and error states in UI.
+- **Forms:** Do not pre-fill password fields with real defaults; use empty string or placeholder only.

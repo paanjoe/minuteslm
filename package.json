@@ -1,0 +1,12 @@
+{
+  "name": "minuteslm",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n fe,be -c blue,green \"pnpm run dev:frontend\" \"pnpm run dev:backend\"",
+    "dev:frontend": "pnpm -C frontend dev",
+    "dev:backend": "node scripts/start-backend.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

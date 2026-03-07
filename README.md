@@ -51,6 +51,18 @@ npm run dev
 
 Open http://localhost:5173
 
+### Run both with pnpm (from repo root)
+
+After backend venv and frontend deps are set up (steps 2 and 4 above):
+
+```bash
+pnpm install
+pnpm run dev
+```
+
+This starts the frontend (Vite) and backend (Uvicorn) together. Frontend: http://localhost:5173, Backend: http://localhost:8000.  
+Use `pnpm run dev:frontend` or `pnpm run dev:backend` to run only one.
+
 ## Docker (self-hosting)
 
 **Note:** `whisper-turbo` requires Apple Silicon. On Linux x86 servers, the backend build may fail; consider using `faster-whisper` or another ASR instead.
@@ -64,7 +76,7 @@ docker compose up -d
 # Ollama must run on the host (install separately)
 ```
 
-Set `OLLAMA_BASE_URL` if Ollama runs elsewhere (e.g. `http://host.docker.internal:11434` on Mac).
+Set `OLLAMA_BASE_URL` if Ollama runs elsewhere (e.g. `http://host.docker.internal:11434` on Mac). For production, set `CORS_ORIGINS` to comma-separated frontend origins (e.g. `https://app.example.com`) instead of allowing all origins.
 
 ## API
 

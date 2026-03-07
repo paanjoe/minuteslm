@@ -1,0 +1,12 @@
+---
+description: Core coding and security standards for the project
+alwaysApply: true
+---
+
+# Project standards
+
+- **Secrets:** No hardcoded secrets or default passwords in source. Use environment variables and document placeholders in `.env.example`.
+- **Constants:** Single source of truth for shared constants (e.g. storage keys, API base).
+- **Input:** Validate and sanitize user input; use allowlists for file types and path building.
+- **API:** Prefer Pydantic schemas for request/response; return clear 4xx messages without leaking internals.
+- **TypeScript:** Prefer explicit error handling and avoid `any`.

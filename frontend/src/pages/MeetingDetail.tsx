@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { api } from '../api/client';
 import type { Meeting, Minute, MeetingSpeakerSnippet } from '../api/client';
 import { SpeakerListField, cleanSpeakerListForApi } from '../components/SpeakerListField';
+import { TOKEN_KEY } from '../constants/auth';
 
 const isProcessing = (m: Meeting | undefined) =>
   m?.status === 'transcribing' || m?.status === 'formatting';
@@ -873,7 +874,7 @@ function SnippetPlayButton({
     if (playing || loading) return;
     setLoading(true);
     try {
-      const token = localStorage.getItem('minuteslm_token');
+      const token = localStorage.getItem(TOKEN_KEY);
       const res = await fetch(
         api.meetings.detectedSpeakerAudioUrl(meetingId, snippetId),
         { headers: token ? { Authorization: `Bearer ${token}` } : {} }

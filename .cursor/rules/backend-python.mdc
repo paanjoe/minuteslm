@@ -1,0 +1,14 @@
+---
+description: Python / FastAPI backend conventions and security
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+# Backend (Python / FastAPI)
+
+- **Types & config:** Use type hints and Pydantic for config and request bodies.
+- **Auth:** Rely on `get_current_user_id` for protected routes; do not trust client for user identity.
+- **DB:** Use SQLAlchemy ORM or parameterized queries; avoid raw SQL with string interpolation.
+- **File uploads:** Check extension allowlist and size (reuse `settings.max_upload_mb`); build paths from IDs + sanitized filename (e.g. `Path(file.filename or "file").name`).
+- **Secrets:** Load env-specific values from `app.core.config` (pydantic-settings). In production, do not rely on default `admin_password` / `admin_token`; set via env.
+- **CORS:** In production, set `allow_origins` to explicit origins (e.g. via `CORS_ORIGINS` env), not `["*"]` with credentials.

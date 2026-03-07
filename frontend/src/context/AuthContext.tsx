@@ -7,8 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 
-const TOKEN_KEY = 'minuteslm_token';
-const USER_KEY = 'minuteslm_user';
+import { TOKEN_KEY, USER_KEY } from '../constants/auth';
 
 export interface AuthUser {
   id: number;

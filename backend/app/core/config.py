@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     admin_password: str = "admin"
     admin_token: str = "admin"
 
+    # CORS: set CORS_ORIGINS to comma-separated origins in production (e.g. https://app.example.com)
+    cors_origins: str = ""
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

@@ -1,5 +1,6 @@
+import { TOKEN_KEY } from '../constants/auth';
+
 const API_BASE = '/api';
-const TOKEN_KEY = 'minuteslm_token';
 
 function authHeaders(init?: RequestInit): HeadersInit {
   const headers: Record<string, string> = {
