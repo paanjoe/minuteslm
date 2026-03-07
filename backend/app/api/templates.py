@@ -60,6 +60,7 @@ def create_template(
         name=payload.name,
         prompt_suffix=payload.prompt_suffix,
         structure=structure,
+        format_spec_markdown=payload.format_spec_markdown,
     )
     db.add(template)
     db.commit()
@@ -115,6 +116,8 @@ def update_template(
         template.prompt_suffix = payload.prompt_suffix
     if payload.structure is not None:
         template.structure = payload.structure
+    if payload.format_spec_markdown is not None:
+        template.format_spec_markdown = (payload.format_spec_markdown or "").strip() or None
     db.commit()
     db.refresh(template)
     return template

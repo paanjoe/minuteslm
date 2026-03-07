@@ -11,6 +11,7 @@ export function Templates() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formName, setFormName] = useState('');
   const [formProjectId, setFormProjectId] = useState<number | ''>('');
+  const [formFormatSpecMarkdown, setFormFormatSpecMarkdown] = useState('');
 
   const { data: projects } = useQuery({
     queryKey: ['projects'],
@@ -28,12 +29,14 @@ export function Templates() {
       api.templates.create({
         name: formName || 'Untitled Template',
         project_id: formProjectId === '' ? null : formProjectId,
+        format_spec_markdown: formFormatSpecMarkdown.trim() || null,
       }),
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['templates'] });
       setShowForm(false);
       setFormName('');
       setFormProjectId('');
+      setFormFormatSpecMarkdown('');
       if (pendingFile && created?.id) {
         uploadMutation.mutate({ templateId: created.id, file: pendingFile });
         setPendingFile(null);
@@ -58,12 +61,14 @@ export function Templates() {
       api.templates.update(id, {
         name: formName,
         project_id: formProjectId === '' ? null : formProjectId,
+        format_spec_markdown: formFormatSpecMarkdown.trim() || null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['templates'] });
       setEditingId(null);
       setFormName('');
       setFormProjectId('');
+      setFormFormatSpecMarkdown('');
     },
   });
 
@@ -73,11 +78,14 @@ export function Templates() {
   });
 
   const startEdit = (t: Template) => {
-    setEditingId(t.id);
-    setFormName(t.name);
-    setFormProjectId(t.project_id ?? '');
-    setPendingFile(null);
-    if (templateFileInput.current) templateFileInput.current.value = '';
+    api.templates.get(t.id).then((full) => {
+      setEditingId(full.id);
+      setFormName(full.name);
+      setFormProjectId(full.project_id ?? '');
+      setFormFormatSpecMarkdown(full.format_spec_markdown ?? '');
+      setPendingFile(null);
+      if (templateFileInput.current) templateFileInput.current.value = '';
+    });
   };
 
   const cancelForm = () => {
@@ -85,6 +93,7 @@ export function Templates() {
     setEditingId(null);
     setFormName('');
     setFormProjectId('');
+    setFormFormatSpecMarkdown('');
     setPendingFile(null);
   };
 
@@ -120,7 +129,13 @@ export function Templates() {
         {!showForm && !editingId && (
           <button
             type="button"
-            onClick={() => setShowForm(true)}
+            onClick={() => {
+              setShowForm(true);
+              setFormName('');
+              setFormProjectId('');
+              setFormFormatSpecMarkdown('');
+              setPendingFile(null);
+            }}
             className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
           >
             Add template
@@ -166,6 +181,21 @@ export function Templates() {
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">
+                Format specification (markdown)
+              </label>
+              <textarea
+                value={formFormatSpecMarkdown}
+                onChange={(e) => setFormFormatSpecMarkdown(e.target.value)}
+                placeholder={`Meeting Title:\nMeeting Attendee:\nMinutes taken by:\n## List of Items discussed or Action Items\n- `}
+                rows={8}
+                className="mt-1 w-full max-w-2xl rounded border border-slate-300 px-3 py-2 text-sm font-mono"
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Define the exact structure the LLM must follow. Headings and labels will be preserved; the model will fill content from the transcript. When set, minutes are output as markdown in this format instead of the default JSON structure.
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700">

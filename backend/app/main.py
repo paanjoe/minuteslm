@@ -8,8 +8,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.auth import router as auth_router
 from app.api.meetings import router as meetings_router
 from app.api.projects import router as projects_router
+from app.api.purge import router as purge_router
 from app.api.speakers import router as speakers_router
 from app.api.templates import router as templates_router
+from app.api.users import router as users_router
 from app.core.config import settings
 from app.core.database import SessionLocal, engine, Base
 from app.models import User
@@ -97,6 +99,114 @@ def _ensure_template_file_columns():
                 conn.commit()
 
 
+def _ensure_transcript_segments():
+    """Add segments (JSONB) to transcripts if missing."""
+    with engine.connect() as conn:
+        r = conn.execute(
+            text(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name = 'transcripts' AND column_name = 'segments'"
+            )
+        )
+        if r.fetchone() is None:
+            conn.execute(text("ALTER TABLE transcripts ADD COLUMN segments JSONB"))
+            conn.commit()
+
+
+def _ensure_template_format_spec_markdown():
+    """Add format_spec_markdown to templates if missing."""
+    with engine.connect() as conn:
+        r = conn.execute(
+            text(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name = 'templates' AND column_name = 'format_spec_markdown'"
+            )
+        )
+        if r.fetchone() is None:
+            conn.execute(text("ALTER TABLE templates ADD COLUMN format_spec_markdown TEXT"))
+            conn.commit()
+
+
+def _ensure_meeting_metadata_columns():
+    """Add discussion_date_time, attendee, absentees, minutes_taken_by to meetings if missing."""
+    with engine.connect() as conn:
+        for col, col_type in [
+            ("discussion_date_time", "TIMESTAMP WITH TIME ZONE"),
+            ("attendee", "TEXT"),
+            ("absentees", "TEXT"),
+            ("minutes_taken_by", "VARCHAR(255)"),
+        ]:
+            r = conn.execute(
+                text(
+                    "SELECT 1 FROM information_schema.columns "
+                    "WHERE table_name = 'meetings' AND column_name = :col"
+                ),
+                {"col": col},
+            )
+            if r.fetchone() is None:
+                conn.execute(text(f"ALTER TABLE meetings ADD COLUMN {col} {col_type}"))
+                conn.commit()
+
+
+def _ensure_meeting_summary_context():
+    """Add summary_context to meetings if missing."""
+    with engine.connect() as conn:
+        r = conn.execute(
+            text(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name = 'meetings' AND column_name = 'summary_context'"
+            )
+        )
+        if r.fetchone() is None:
+            conn.execute(text("ALTER TABLE meetings ADD COLUMN summary_context TEXT"))
+            conn.commit()
+
+
+def _ensure_meeting_status_transcribed():
+    """Add 'transcribed' and 'TRANSCRIBED' to meetingstatus enum if missing (DB may use lowercase or uppercase)."""
+    with engine.connect() as conn:
+        for label in ("transcribed", "TRANSCRIBED"):
+            r = conn.execute(
+                text(
+                    "SELECT 1 FROM pg_enum e "
+                    "JOIN pg_type t ON e.enumtypid = t.oid "
+                    "WHERE t.typname = 'meetingstatus' AND e.enumlabel = :label"
+                ),
+                {"label": label},
+            )
+            if r.fetchone() is None:
+                # Use literal label (safe: only our two fixed strings)
+                sql = "ALTER TYPE meetingstatus ADD VALUE 'transcribed'" if label == "transcribed" else "ALTER TYPE meetingstatus ADD VALUE 'TRANSCRIBED'"
+                conn.execute(text(sql))
+                conn.commit()
+
+
+def _ensure_user_token():
+    """Add token column to users if missing."""
+    with engine.connect() as conn:
+        r = conn.execute(
+            text(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name = 'users' AND column_name = 'token'"
+            )
+        )
+        if r.fetchone() is None:
+            conn.execute(text("ALTER TABLE users ADD COLUMN token VARCHAR(256)"))
+            conn.commit()
+
+
+def _sync_users_id_sequence():
+    """Sync the users.id sequence to max(id) so new inserts get correct next id (fixes duplicate key on id=1)."""
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                "SELECT setval(pg_get_serial_sequence('users', 'id'), "
+                "COALESCE((SELECT MAX(id) FROM users), 1))"
+            )
+        )
+        conn.commit()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Create tables and seed dummy admin user."""
@@ -106,6 +216,12 @@ async def lifespan(app: FastAPI):
     _ensure_project_default_template()
     _ensure_meetings_template_id()
     _ensure_template_file_columns()
+    _ensure_transcript_segments()
+    _ensure_template_format_spec_markdown()
+    _ensure_meeting_metadata_columns()
+    _ensure_meeting_summary_context()
+    _ensure_meeting_status_transcribed()
+    _ensure_user_token()
     db = SessionLocal()
     try:
         admin = db.query(User).filter(User.username == settings.admin_username).first()
@@ -116,6 +232,7 @@ async def lifespan(app: FastAPI):
             )
             db.add(admin)
             db.commit()
+        _sync_users_id_sequence()
     finally:
         db.close()
     yield
@@ -141,9 +258,17 @@ app.include_router(projects_router)
 app.include_router(templates_router)
 app.include_router(meetings_router)
 app.include_router(speakers_router)
+app.include_router(purge_router)
+app.include_router(users_router)
 
 
 @app.get("/health")
 def health():
     """Health check."""
     return {"status": "ok"}
+
+
+@app.get("/config")
+def get_config():
+    """Public config for UI (e.g. AI model name). Called as /api/config via proxy."""
+    return {"ollama_model": settings.ollama_model}

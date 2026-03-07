@@ -1,14 +1,15 @@
-"""Transcript model - raw ASR output."""
-from typing import Optional
+"""Transcript model - raw ASR output with optional segment-level data."""
+from typing import Any, Optional
 
 from sqlalchemy import Float, ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
 
 class Transcript(Base):
-    """Raw transcript from ASR."""
+    """Raw transcript from ASR. segments: list of {id, start, end, text} for timestamped view."""
 
     __tablename__ = "transcripts"
 
@@ -19,5 +20,8 @@ class Transcript(Base):
     duration_seconds: Mapped[Optional[float]] = mapped_column(
         Float, nullable=True
     )
+    segments: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+        JSONB, nullable=True
+    )  # [{id, start, end, text}, ...]
 
     meeting = relationship("Meeting", back_populates="transcript")

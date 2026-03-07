@@ -23,6 +23,7 @@ function statusBadge(status: MeetingStatus) {
 
 export function Dashboard() {
   const { projectId } = useParams<{ projectId: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [newProjectName, setNewProjectName] = useState('');
   const [showAddProject, setShowAddProject] = useState(false);
@@ -37,19 +38,6 @@ export function Dashboard() {
     queryKey: ['meetings', currentProjectId],
     queryFn: () => api.meetings.list(currentProjectId!),
     enabled: currentProjectId != null,
-  });
-
-  const { data: templates } = useQuery({
-    queryKey: ['templates'],
-    queryFn: () => api.templates.list(),
-  });
-
-  const updateProjectMutation = useMutation({
-    mutationFn: (data: { name?: string; default_template_id?: number | null }) =>
-      api.projects.update(currentProjectId!, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-    },
   });
 
   const createProjectMutation = useMutation({
@@ -129,7 +117,6 @@ export function Dashboard() {
 
   // Project selected: show meetings in this project (directory of meetings)
   const project = projects?.find((p) => p.id === currentProjectId);
-  const navigate = useNavigate();
 
   return (
     <div className="space-y-6">
@@ -149,34 +136,6 @@ export function Dashboard() {
         >
           New meeting
         </Link>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-4">
-        <label className="flex items-center gap-2 text-sm text-slate-700">
-          Default minutes template:
-          <select
-            value={project?.default_template_id ?? ''}
-            onChange={(e) => {
-              const val = e.target.value === '' ? null : Number(e.target.value);
-              updateProjectMutation.mutate({ default_template_id: val });
-            }}
-            disabled={updateProjectMutation.isPending}
-            className="rounded border border-slate-300 px-2 py-1.5 text-sm"
-          >
-            <option value="">None (standard format)</option>
-            {templates
-              ?.filter(
-                (t) =>
-                  !t.project_id || t.project_id === currentProjectId
-              )
-              .map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                  {t.project_id ? ` (this project)` : ''}
-                </option>
-              ))}
-          </select>
-        </label>
       </div>
 
       <h2 className="text-lg font-medium text-slate-700">Meetings</h2>

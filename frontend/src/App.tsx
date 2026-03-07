@@ -1,16 +1,17 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Routes, Route, Link, NavLink } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { Toaster } from 'react-hot-toast';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './pages/Dashboard';
 import { MeetingDetail } from './pages/MeetingDetail';
 import { Record } from './pages/Record';
 import { VoiceSamples } from './pages/VoiceSamples';
 import { Templates } from './pages/Templates';
+import { About } from './pages/About';
 import { Login } from './pages/Login';
-
-const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-  `text-sm font-medium ${isActive ? 'text-indigo-600' : 'text-slate-600 hover:text-slate-900'}`;
+import { Users } from './pages/Users';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -21,47 +22,10 @@ const queryClient = new QueryClient({
   },
 });
 
-function Nav() {
-  const { user, logout } = useAuth();
-  return (
-    <nav className="border-b border-slate-200 bg-white">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-14 items-center justify-between">
-          <Link to="/" className="text-lg font-semibold text-slate-900">
-            MinutesLM
-          </Link>
-          <div className="flex items-center gap-6">
-            <NavLink to="/" end className={navLinkClass}>
-              Projects
-            </NavLink>
-            <NavLink to="/voice-samples" className={navLinkClass}>
-              Voice samples
-            </NavLink>
-            <NavLink to="/templates" className={navLinkClass}>
-              Templates
-            </NavLink>
-            <NavLink to="/record" className={navLinkClass}>
-              New meeting
-            </NavLink>
-            <span className="text-sm text-slate-400">|</span>
-            <span className="text-sm text-slate-500">{user?.username}</span>
-            <button
-              type="button"
-              onClick={logout}
-              className="text-sm font-medium text-slate-600 hover:text-slate-900"
-            >
-              Log out
-            </button>
-          </div>
-        </div>
-      </div>
-    </nav>
-  );
-}
-
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <Toaster position="bottom-right" />
       <BrowserRouter>
         <AuthProvider>
           <Routes>
@@ -71,16 +35,23 @@ function App() {
               element={
                 <ProtectedRoute>
                   <div className="min-h-screen bg-slate-50">
-                    <Nav />
-                    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-                      <Routes>
-                        <Route path="/" element={<Dashboard />} />
-                        <Route path="/projects/:projectId" element={<Dashboard />} />
-                        <Route path="/voice-samples" element={<VoiceSamples />} />
-                        <Route path="/templates" element={<Templates />} />
-                        <Route path="/record" element={<Record />} />
-                        <Route path="/meetings/:id" element={<MeetingDetail />} />
-                      </Routes>
+                    <Sidebar />
+                    <main className="flex min-h-screen flex-col pl-14">
+                      <div className="mx-auto flex-1 w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+                        <Routes>
+                          <Route path="/" element={<Dashboard />} />
+                          <Route path="/projects/:projectId" element={<Dashboard />} />
+                          <Route path="/voice-samples" element={<VoiceSamples />} />
+                          <Route path="/templates" element={<Templates />} />
+                          <Route path="/record" element={<Record />} />
+                          <Route path="/meetings/:id" element={<MeetingDetail />} />
+                          <Route path="/users" element={<Users />} />
+                          <Route path="/about" element={<About />} />
+                        </Routes>
+                      </div>
+                      <footer className="border-t border-slate-200 bg-white py-3 text-center text-sm text-slate-500">
+                        Privacy-first: your data stays on your infrastructure. No cloud required.
+                      </footer>
                     </main>
                   </div>
                 </ProtectedRoute>

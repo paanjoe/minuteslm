@@ -9,6 +9,7 @@ class TemplateCreate(BaseModel):
     project_id: Optional[int] = None
     prompt_suffix: Optional[str] = None
     structure: Optional[dict[str, Any]] = None
+    format_spec_markdown: Optional[str] = None
 
 
 class TemplateUpdate(BaseModel):
@@ -16,6 +17,7 @@ class TemplateUpdate(BaseModel):
     project_id: Optional[int] = None
     prompt_suffix: Optional[str] = None
     structure: Optional[dict[str, Any]] = None
+    format_spec_markdown: Optional[str] = None
 
 
 class TemplateResponse(BaseModel):
@@ -27,6 +29,7 @@ class TemplateResponse(BaseModel):
     name: str
     structure: dict[str, Any]
     prompt_suffix: Optional[str] = None
+    format_spec_markdown: Optional[str] = None
     file_path: Optional[str] = None
     file_name: Optional[str] = None
     section_titles: Optional[List[str]] = None

@@ -12,6 +12,24 @@ from app.models import MeetingSpeakerSnippet
 
 logger = logging.getLogger(__name__)
 
+# Check once at import; avoid logging "pydub not installed" per snippet
+_pydub_available: bool | None = None
+
+
+def _check_pydub() -> bool:
+    global _pydub_available
+    if _pydub_available is None:
+        try:
+            __import__("pydub")
+            _pydub_available = True
+        except ImportError:
+            _pydub_available = False
+            logger.warning(
+                "pydub not installed; speaker snippet extraction disabled. "
+                "Install with: pip install pydub"
+            )
+    return _pydub_available
+
 # Max gap (sec) between segments to consider same "turn"
 TURN_GAP_SEC = 2.0
 # Min duration (sec) for a turn to become a snippet
@@ -49,11 +67,9 @@ def _extract_snippet_audio(
     audio_path: str, start_sec: float, end_sec: float, out_path: Path
 ) -> bool:
     """Extract segment to WAV using pydub. Returns True on success."""
-    try:
-        from pydub import AudioSegment
-    except ImportError:
-        logger.warning("pydub not installed, skipping snippet extraction")
+    if not _check_pydub():
         return False
+    from pydub import AudioSegment
     path = Path(audio_path)
     if not path.exists():
         return False
@@ -85,6 +101,8 @@ def extract_and_save_snippets(
     save to uploads/detected_speakers and create MeetingSpeakerSnippet rows.
     Returns number of snippets created.
     """
+    if not _check_pydub():
+        return 0
     turns = _segments_to_turns(segments)
     if not turns:
         return 0

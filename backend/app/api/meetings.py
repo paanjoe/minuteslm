@@ -9,7 +9,17 @@ from sqlalchemy.orm import Session
 from app.core.auth import get_current_user_id
 from app.core.config import settings
 from app.core.database import get_db
-from app.models import Meeting, MeetingStatus, Project, Template, Transcript, Minute, ActionItem, MeetingSpeakerSnippet, Speaker
+from app.models import (
+    Meeting,
+    MeetingStatus,
+    Project,
+    Template,
+    Transcript,
+    Minute,
+    ActionItem,
+    MeetingSpeakerSnippet,
+    Speaker,
+)
 from app.services.progress import get_progress, set_progress
 from app.schemas import (
     MeetingCreate,
@@ -38,6 +48,29 @@ def _get_meeting_owned(
     if not meeting:
         raise HTTPException(status_code=404, detail="Meeting not found")
     return meeting
+
+
+def _ensure_speaker_profiles_for_names(
+    user_id: int,
+    attendee: Optional[str],
+    absentees: Optional[str],
+    db: Session,
+) -> None:
+    """Create Speaker profiles for any attendee/absentee names that don't exist yet (so they appear on Voice samples)."""
+    names = set()
+    for raw in (attendee or "", absentees or ""):
+        for line in raw.split("\n"):
+            name = line.strip()
+            if name:
+                names.add(name)
+    for name in names:
+        existing = (
+            db.query(Speaker)
+            .filter(Speaker.user_id == user_id, Speaker.name == name)
+            .first()
+        )
+        if not existing:
+            db.add(Speaker(user_id=user_id, name=name))
 
 
 @router.get("", response_model=List[MeetingListResponse])
@@ -81,7 +114,18 @@ def create_meeting(
     )
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    meeting = Meeting(project_id=payload.project_id, title=payload.title)
+    _ensure_speaker_profiles_for_names(
+        user_id, payload.attendee, payload.absentees, db
+    )
+    meeting = Meeting(
+        project_id=payload.project_id,
+        title=payload.title,
+        discussion_date_time=payload.discussion_date_time,
+        attendee=payload.attendee,
+        absentees=payload.absentees,
+        minutes_taken_by=payload.minutes_taken_by,
+        summary_context=payload.summary_context,
+    )
     db.add(meeting)
     db.commit()
     db.refresh(meeting)
@@ -98,8 +142,11 @@ def get_meeting(
     meeting = _get_meeting_owned(meeting_id, user_id, db)
     resp = MeetingResponse.model_validate(meeting)
     if meeting.status in (MeetingStatus.TRANSCRIBING, MeetingStatus.FORMATTING):
-        if msg := get_progress(meeting_id):
-            resp = resp.model_copy(update={"progress_message": msg})
+        msg, pct = get_progress(meeting_id)
+        if msg is not None:
+            resp = resp.model_copy(
+                update={"progress_message": msg, "progress_percentage": pct}
+            )
     return resp
 
 
@@ -110,10 +157,25 @@ def update_meeting(
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
-    """Update meeting (title and/or minutes template override)."""
+    """Update meeting (title, template, and/or metadata)."""
     meeting = _get_meeting_owned(meeting_id, user_id, db)
     if payload.title is not None:
         meeting.title = payload.title
+    if payload.discussion_date_time is not None:
+        meeting.discussion_date_time = payload.discussion_date_time
+    if payload.attendee is not None:
+        meeting.attendee = payload.attendee
+    if payload.absentees is not None:
+        meeting.absentees = payload.absentees
+    if payload.minutes_taken_by is not None:
+        meeting.minutes_taken_by = payload.minutes_taken_by
+    if payload.attendee is not None or payload.absentees is not None:
+        _ensure_speaker_profiles_for_names(
+            user_id,
+            payload.attendee if payload.attendee is not None else meeting.attendee,
+            payload.absentees if payload.absentees is not None else meeting.absentees,
+            db,
+        )
     if payload.template_id is not None:
         if payload.template_id:
             t = (
@@ -124,6 +186,8 @@ def update_meeting(
             if not t:
                 raise HTTPException(status_code=404, detail="Template not found")
         meeting.template_id = payload.template_id if payload.template_id else None
+    if payload.summary_context is not None:
+        meeting.summary_context = payload.summary_context
     db.commit()
     db.refresh(meeting)
     return MeetingResponse.model_validate(meeting)
@@ -165,16 +229,12 @@ async def upload_audio(
     path.write_bytes(contents)
 
     meeting.audio_path = str(path)
-    meeting.status = MeetingStatus.TRANSCRIBING
+    meeting.status = MeetingStatus.RECORDING
     db.commit()
     db.refresh(meeting)
 
-    set_progress(meeting_id, "Starting transcription...")
-    from app.services.transcription import transcribe_meeting_async
-    transcribe_meeting_async(meeting_id)
-
     resp = MeetingResponse.model_validate(meeting)
-    return resp.model_copy(update={"progress_message": "Starting transcription..."})
+    return resp
 
 
 @router.get("/{meeting_id}/transcript", response_model=Optional[TranscriptResponse])
@@ -324,13 +384,41 @@ def delete_meeting(
     return {"ok": True}
 
 
+@router.post("/{meeting_id}/transcribe", response_model=MeetingResponse)
+def start_transcribe(
+    meeting_id: int,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Start transcription (after upload). Requires audio; does not delete existing transcript."""
+    meeting = _get_meeting_owned(meeting_id, user_id, db)
+    if not meeting.audio_path:
+        raise HTTPException(
+            status_code=400, detail="No audio file. Upload audio first."
+        )
+    path = Path(meeting.audio_path)
+    if not path.exists():
+        raise HTTPException(status_code=400, detail="Audio file not found")
+    meeting.status = MeetingStatus.TRANSCRIBING
+    meeting.error_message = None
+    db.commit()
+    set_progress(meeting_id, "Starting transcription...", 0)
+    from app.services.transcription import transcribe_meeting_async
+    transcribe_meeting_async(meeting_id)
+    db.refresh(meeting)
+    resp = MeetingResponse.model_validate(meeting)
+    return resp.model_copy(
+        update={"progress_message": "Starting transcription...", "progress_percentage": 0}
+    )
+
+
 @router.post("/{meeting_id}/retranscribe", response_model=MeetingResponse)
 def retranscribe(
     meeting_id: int,
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
-    """Re-run transcription on existing audio. Requires audio to be uploaded."""
+    """Re-run transcription on existing audio (deletes current transcript and minutes)."""
     meeting = _get_meeting_owned(meeting_id, user_id, db)
     if not meeting.audio_path:
         raise HTTPException(
@@ -348,13 +436,48 @@ def retranscribe(
     meeting.error_message = None
     db.commit()
 
-    set_progress(meeting_id, "Starting re-transcription...")
+    set_progress(meeting_id, "Starting re-transcription...", 0)
     from app.services.transcription import transcribe_meeting_async
     transcribe_meeting_async(meeting_id)
 
     db.refresh(meeting)
     resp = MeetingResponse.model_validate(meeting)
-    return resp.model_copy(update={"progress_message": "Starting re-transcription..."})
+    return resp.model_copy(
+        update={"progress_message": "Starting re-transcription...", "progress_percentage": 0}
+    )
+
+
+@router.get("/{meeting_id}/format-prompt-preview")
+def get_format_prompt_preview(
+    meeting_id: int,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Return the exact prompt that would be sent to Qwen/Ollama for this meeting (for debugging format not being followed)."""
+    _get_meeting_owned(meeting_id, user_id, db)
+    transcript = (
+        db.query(Transcript)
+        .filter(Transcript.meeting_id == meeting_id)
+        .first()
+    )
+    if not transcript:
+        raise HTTPException(status_code=400, detail="No transcript. Transcribe first.")
+    from app.services.formatting import build_format_prompt, _resolve_template_for_meeting
+    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+    template = _resolve_template_for_meeting(meeting, db)
+    prompt_suffix = template.prompt_suffix if template else None
+    template_sample = template.sample_content if template else None
+    format_spec_markdown = getattr(template, "format_spec_markdown", None) if template else None
+    summary_context = getattr(meeting, "summary_context", None) or None
+    prompt = build_format_prompt(
+        transcript.raw_text,
+        prompt_suffix=prompt_suffix,
+        template_sample=template_sample,
+        format_spec_markdown=format_spec_markdown,
+        transcript_max_chars=4000,
+        summary_context=summary_context,
+    )
+    return {"prompt": prompt, "model": settings.ollama_model}
 
 
 @router.post("/{meeting_id}/reformat", response_model=MeetingResponse)
@@ -382,13 +505,16 @@ def reformat(
     meeting.error_message = None
     db.commit()
 
-    set_progress(meeting_id, "Re-formatting with Ollama...")
+    set_progress(meeting_id, "Re-formatting with Ollama...", 85)
     from app.services.formatting import format_meeting_sync
     format_meeting_sync(meeting_id)  # Run synchronously so response includes final state
 
     db.refresh(meeting)
     resp = MeetingResponse.model_validate(meeting)
     if meeting.status in (MeetingStatus.TRANSCRIBING, MeetingStatus.FORMATTING):
-        if msg := get_progress(meeting_id):
-            resp = resp.model_copy(update={"progress_message": msg})
+        msg, pct = get_progress(meeting_id)
+        if msg is not None:
+            resp = resp.model_copy(
+                update={"progress_message": msg, "progress_percentage": pct}
+            )
     return resp

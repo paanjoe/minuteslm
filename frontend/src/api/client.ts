@@ -15,6 +15,7 @@ function authHeaders(init?: RequestInit): HeadersInit {
 export type MeetingStatus =
   | 'recording'
   | 'transcribing'
+  | 'transcribed'
   | 'formatting'
   | 'formatted'
   | 'error';
@@ -29,6 +30,29 @@ export interface Meeting {
   status: MeetingStatus;
   error_message: string | null;
   progress_message?: string | null;
+  progress_percentage?: number | null;
+  discussion_date_time?: string | null;
+  attendee?: string | null;
+  absentees?: string | null;
+  minutes_taken_by?: string | null;
+  summary_context?: string | null;
+}
+
+export interface MeetingCreatePayload {
+  title: string;
+  project_id: number;
+  discussion_date_time?: string | null;
+  attendee?: string | null;
+  absentees?: string | null;
+  minutes_taken_by?: string | null;
+  summary_context?: string | null;
+}
+
+export interface TranscriptSegment {
+  id: number;
+  start: number;
+  end: number;
+  text: string;
 }
 
 export interface Transcript {
@@ -37,6 +61,7 @@ export interface Transcript {
   raw_text: string;
   language: string | null;
   duration_seconds: number | null;
+  segments?: TranscriptSegment[] | null;
 }
 
 export interface Minute {
@@ -72,6 +97,7 @@ export interface Template {
   name: string;
   structure: Record<string, string>;
   prompt_suffix: string | null;
+  format_spec_markdown: string | null;
   file_name: string | null;
   section_titles: string[] | null;
   is_default: boolean;
@@ -125,7 +151,42 @@ function fetchApiWithAuth<T>(path: string, init?: RequestInit): Promise<T> {
   });
 }
 
+export interface Config {
+  ollama_model: string;
+}
+
+export interface PurgeResult {
+  deleted_rows: number;
+  deleted_files: number;
+  deleted_meetings: number;
+  deleted_projects: number;
+  deleted_speakers: number;
+  deleted_templates: number;
+}
+
+export interface UserListItem {
+  id: number;
+  username: string;
+  created_at: string;
+  is_protected: boolean;
+}
+
 export const api = {
+  config: {
+    get: () => fetchApiWithAuth<Config>('/config'),
+  },
+  purge: () =>
+    fetchApiWithAuth<PurgeResult>('/purge', { method: 'POST' }),
+  users: {
+    list: () => fetchApiWithAuth<UserListItem[]>('/users'),
+    create: (username: string, password: string) =>
+      fetchApiWithAuth<UserListItem>('/users', {
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
+      }),
+    delete: (id: number) =>
+      fetchApiWithAuth<unknown>(`/users/${id}`, { method: 'DELETE' }),
+  },
   auth: {
     login: (username: string, password: string) =>
       fetchApi<{ access_token: string; user: { id: number; username: string } }>(
@@ -156,10 +217,10 @@ export const api = {
     list: (projectId: number) =>
       fetchApiWithAuth<Meeting[]>(`/meetings?project_id=${projectId}`),
     get: (id: number) => fetchApiWithAuth<Meeting>(`/meetings/${id}`),
-    create: (title: string, projectId: number) =>
+    create: (payload: MeetingCreatePayload) =>
       fetchApiWithAuth<Meeting>('/meetings', {
         method: 'POST',
-        body: JSON.stringify({ title, project_id: projectId }),
+        body: JSON.stringify(payload),
       }),
     upload: (id: number, file: File) => {
       const fd = new FormData();
@@ -176,13 +237,28 @@ export const api = {
         return r.json() as Promise<Meeting>;
       });
     },
-    update: (id: number, data: { title?: string; template_id?: number | null }) =>
+    update: (
+      id: number,
+      data: {
+        title?: string;
+        template_id?: number | null;
+        discussion_date_time?: string | null;
+        attendee?: string | null;
+        absentees?: string | null;
+        minutes_taken_by?: string | null;
+        summary_context?: string | null;
+      }
+    ) =>
       fetchApiWithAuth<Meeting>(`/meetings/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
       }),
     delete: (id: number) =>
       fetchApiWithAuth<unknown>(`/meetings/${id}`, { method: 'DELETE' }),
+    transcribe: (id: number) =>
+      fetchApiWithAuth<Meeting>(`/meetings/${id}/transcribe`, {
+        method: 'POST',
+      }),
     retranscribe: (id: number) =>
       fetchApiWithAuth<Meeting>(`/meetings/${id}/retranscribe`, {
         method: 'POST',
@@ -191,6 +267,10 @@ export const api = {
       fetchApiWithAuth<Meeting>(`/meetings/${id}/reformat`, {
         method: 'POST',
       }),
+    getFormatPromptPreview: (meetingId: number) =>
+      fetchApiWithAuth<{ prompt: string; model: string }>(
+        `/meetings/${meetingId}/format-prompt-preview`
+      ),
     detectedSpeakers: (meetingId: number) =>
       fetchApiWithAuth<MeetingSpeakerSnippet[]>(
         `/meetings/${meetingId}/detected-speakers`
@@ -270,6 +350,7 @@ export const api = {
       project_id?: number | null;
       prompt_suffix?: string | null;
       structure?: Record<string, string> | null;
+      format_spec_markdown?: string | null;
     }) =>
       fetchApiWithAuth<Template>('/templates', {
         method: 'POST',
@@ -282,6 +363,7 @@ export const api = {
         project_id?: number | null;
         prompt_suffix?: string | null;
         structure?: Record<string, string> | null;
+        format_spec_markdown?: string | null;
       }
     ) =>
       fetchApiWithAuth<Template>(`/templates/${id}`, {

@@ -3,7 +3,7 @@ import enum
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String
+from sqlalchemy import DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -14,6 +14,7 @@ class MeetingStatus(str, enum.Enum):
 
     RECORDING = "recording"
     TRANSCRIBING = "transcribing"
+    TRANSCRIBED = "transcribed"  # transcript ready; format not run yet
     FORMATTING = "formatting"
     FORMATTED = "formatted"
     ERROR = "error"
@@ -42,6 +43,13 @@ class Meeting(Base):
     template_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("templates.id"), nullable=True
     )
+    discussion_date_time: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
+    attendee: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    absentees: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    minutes_taken_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    summary_context: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     project = relationship("Project", back_populates="meetings")
     template = relationship("Template", foreign_keys=[template_id], uselist=False)

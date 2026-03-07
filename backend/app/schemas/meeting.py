@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict
 class MeetingStatus(str, Enum):
     RECORDING = "recording"
     TRANSCRIBING = "transcribing"
+    TRANSCRIBED = "transcribed"
     FORMATTING = "formatting"
     FORMATTED = "formatted"
     ERROR = "error"
@@ -17,11 +18,21 @@ class MeetingStatus(str, Enum):
 class MeetingCreate(BaseModel):
     title: str = "Untitled Meeting"
     project_id: int
+    discussion_date_time: Optional[datetime] = None
+    attendee: Optional[str] = None
+    absentees: Optional[str] = None
+    minutes_taken_by: Optional[str] = None
+    summary_context: Optional[str] = None
 
 
 class MeetingUpdate(BaseModel):
     title: Optional[str] = None
     template_id: Optional[int] = None
+    discussion_date_time: Optional[datetime] = None
+    attendee: Optional[str] = None
+    absentees: Optional[str] = None
+    minutes_taken_by: Optional[str] = None
+    summary_context: Optional[str] = None
 
 
 class MeetingResponse(BaseModel):
@@ -36,6 +47,12 @@ class MeetingResponse(BaseModel):
     status: MeetingStatus
     error_message: Optional[str] = None
     progress_message: Optional[str] = None
+    progress_percentage: Optional[int] = None  # 0-100 when in progress
+    discussion_date_time: Optional[datetime] = None
+    attendee: Optional[str] = None
+    absentees: Optional[str] = None
+    minutes_taken_by: Optional[str] = None
+    summary_context: Optional[str] = None
 
 
 class MeetingListResponse(BaseModel):
@@ -47,3 +64,8 @@ class MeetingListResponse(BaseModel):
     template_id: Optional[int] = None
     created_at: datetime
     status: MeetingStatus
+    discussion_date_time: Optional[datetime] = None
+    attendee: Optional[str] = None
+    absentees: Optional[str] = None
+    minutes_taken_by: Optional[str] = None
+    summary_context: Optional[str] = None

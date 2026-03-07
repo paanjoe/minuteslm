@@ -1,7 +1,14 @@
 """Transcript schemas."""
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict
+
+
+class TranscriptSegmentSchema(BaseModel):
+    id: int
+    start: float
+    end: float
+    text: str
 
 
 class TranscriptResponse(BaseModel):
@@ -12,3 +19,4 @@ class TranscriptResponse(BaseModel):
     raw_text: str
     language: Optional[str] = None
     duration_seconds: Optional[float] = None
+    segments: Optional[list[dict[str, Any]]] = None  # [{id, start, end, text}, ...]

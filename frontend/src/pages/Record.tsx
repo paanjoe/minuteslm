@@ -3,12 +3,40 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { useRecording } from '../hooks/useRecording';
+import { SpeakerListField, cleanSpeakerListForApi } from '../components/SpeakerListField';
+
+function buildCreatePayload(form: {
+  title: string;
+  projectId: number;
+  discussionDateTime: string;
+  attendee: string;
+  absentees: string;
+  minutesTakenBy: string;
+  summaryContext: string;
+}) {
+  return {
+    title: form.title || 'Untitled Meeting',
+    project_id: form.projectId,
+    discussion_date_time: form.discussionDateTime
+      ? new Date(form.discussionDateTime).toISOString()
+      : null,
+    attendee: cleanSpeakerListForApi(form.attendee) || null,
+    absentees: cleanSpeakerListForApi(form.absentees) || null,
+    minutes_taken_by: form.minutesTakenBy.trim() || null,
+    summary_context: form.summaryContext.trim() || null,
+  };
+}
 
 export function Record() {
   const location = useLocation();
   const stateProjectId = (location.state as { projectId?: number } | null)?.projectId;
   const [title, setTitle] = useState('Untitled Meeting');
   const [projectId, setProjectId] = useState<number | null>(stateProjectId ?? null);
+  const [discussionDateTime, setDiscussionDateTime] = useState('');
+  const [attendee, setAttendee] = useState('');
+  const [absentees, setAbsentees] = useState('');
+  const [minutesTakenBy, setMinutesTakenBy] = useState('');
+  const [summaryContext, setSummaryContext] = useState('');
   const { isRecording, blob, start, stop, reset } = useRecording();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -18,9 +46,24 @@ export function Record() {
     queryFn: api.projects.list,
   });
 
+  const { data: speakers } = useQuery({
+    queryKey: ['speakers'],
+    queryFn: api.speakers.list,
+  });
+
   const createMutation = useMutation({
     mutationFn: () =>
-      api.meetings.create(title, projectId ?? 0),
+      api.meetings.create(
+        buildCreatePayload({
+          title,
+          projectId: projectId ?? 0,
+          discussionDateTime,
+          attendee,
+          absentees,
+          minutesTakenBy,
+          summaryContext,
+        })
+      ),
     onSuccess: (meeting) => {
       queryClient.invalidateQueries({ queryKey: ['meetings'] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -43,7 +86,17 @@ export function Record() {
 
   const handleCreateAndUpload = async () => {
     if (!blob || !projectId) return;
-    const meeting = await api.meetings.create(title, projectId);
+    const meeting = await api.meetings.create(
+      buildCreatePayload({
+        title,
+        projectId,
+        discussionDateTime,
+        attendee,
+        absentees,
+        minutesTakenBy,
+        summaryContext,
+      })
+    );
     const file = new File([blob], 'recording.webm', { type: blob.type });
     uploadMutation.mutate({ meetingId: meeting.id, file });
   };
@@ -54,35 +107,93 @@ export function Record() {
         New Meeting
       </h1>
 
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-2">
-          Project
-        </label>
-        <select
-          value={projectId ?? ''}
-          onChange={(e) => setProjectId(e.target.value ? parseInt(e.target.value, 10) : null)}
-          className="w-full rounded-lg border border-slate-300 px-4 py-2 text-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-        >
-          <option value="">Select a project</option>
-          {projects?.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-2">
-          Meeting title
-        </label>
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          className="w-full rounded-lg border border-slate-300 px-4 py-2 text-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-          placeholder="e.g. Weekly sync"
+      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+        <h2 className="text-sm font-medium text-slate-900 border-b border-slate-100 pb-2">
+          Meeting details
+        </h2>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Meeting Title
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 px-4 py-2 text-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            placeholder="e.g. Weekly sync"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Project Name
+          </label>
+          <select
+            value={projectId ?? ''}
+            onChange={(e) => setProjectId(e.target.value ? parseInt(e.target.value, 10) : null)}
+            className="w-full rounded-lg border border-slate-300 px-4 py-2 text-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+          >
+            <option value="">Select a project</option>
+            {projects?.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Discussion Date & Time
+          </label>
+          <input
+            type="datetime-local"
+            value={discussionDateTime}
+            onChange={(e) => setDiscussionDateTime(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 px-4 py-2 text-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+          />
+        </div>
+        <SpeakerListField
+          value={attendee}
+          onChange={setAttendee}
+          label="Attendee"
+          placeholder="Type to pick from Voice Samples or enter name"
+          addButtonLabel="Add attendee"
+          speakers={speakers}
+          datalistId="record-attendee-speakers"
         />
+        <SpeakerListField
+          value={absentees}
+          onChange={setAbsentees}
+          label="Absentees"
+          placeholder="Type name"
+          addButtonLabel="Add absentee"
+          speakers={speakers}
+          datalistId="record-absentee-speakers"
+          defaultOptionLabel="None"
+        />
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Minutes taken by
+          </label>
+          <input
+            type="text"
+            value={minutesTakenBy}
+            onChange={(e) => setMinutesTakenBy(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 px-4 py-2 text-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            placeholder="Name of note-taker"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Context for AI summary <span className="text-slate-400 font-normal">(optional)</span>
+          </label>
+          <textarea
+            value={summaryContext}
+            onChange={(e) => setSummaryContext(e.target.value)}
+            rows={2}
+            className="w-full rounded-lg border border-slate-300 px-4 py-2 text-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            placeholder="e.g. participants, meeting overview, objective…"
+          />
+        </div>
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-8 shadow-sm">

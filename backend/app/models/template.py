@@ -36,6 +36,7 @@ class Template(Base):
     file_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     sample_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     section_titles: Mapped[Optional[List[str]]] = mapped_column(JSONB, nullable=True)
+    format_spec_markdown: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_default: Mapped[bool] = mapped_column(default=False)
 
     user = relationship("User", back_populates="templates")
